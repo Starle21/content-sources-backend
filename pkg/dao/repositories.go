@@ -54,6 +54,17 @@ type repositoryDaoImpl struct {
 	db *gorm.DB
 }
 
+
+func (p repositoryDaoImpl) FetchAllUrls(ctx context.Context) ([]string, error) {
+	var dbRepos []models.Repository
+	var urls []string
+	err := p.db.WithContext(ctx).Model(&dbRepos).Pluck("URL", &urls).Error
+	if (err != nil) { 
+		return urls, err
+	}
+	return urls, nil
+}
+
 func (p repositoryDaoImpl) FetchRepositoryRPMCount(ctx context.Context, repoUUID string) (int, error) {
 	var dbRepos []models.RepositoryRpm
 	var count int64 = 0

@@ -246,6 +246,35 @@ func (suite *ReposSuite) TestSimple() {
 	assert.Equal(t, collection.Data[0].LastSnapshot.UUID, response.Data[0].LastSnapshot.UUID)
 }
 
+func (suite *ReposSuite) TestGetUrls(){
+	t := suite.T()
+
+	// prepare mock expectedUrls response
+	expectedUrls := []string{"https://ok.myproject.io/test/1/", "https://ok.myproject.io/test/2/"}
+
+	// mock response
+	suite.reg.Repository.On("FetchAllUrls", test.MockCtx()).Return(expectedUrls, nil)
+
+	// prepare request
+	req := httptest.NewRequest(http.MethodGet, api.FullRootPath()+"/repositories/urls/", nil)
+	req.Header.Set(api.IdentityHeader, test_handler.EncodedIdentity(t))
+	req.Header.Set("Content-Type", "application/json")
+	
+	// execute request
+	code, body, err := suite.serveRepositoriesRouter(req)
+	assert.Nil(t, err)
+
+	// convert []byte into []string
+	var actualUrls []string
+	err = json.Unmarshal(body, &actualUrls)
+
+	assert.Nil(t, err)
+
+	// assert that it returns ok code and expected urls
+	assert.Equal(t, actualUrls, expectedUrls)
+	assert.Equal(t, http.StatusOK, code)
+}
+
 func (suite *ReposSuite) TestListNoRepositories() {
 	t := suite.T()
 

@@ -68,11 +68,20 @@ func RegisterRepositoryRoutes(engine *echo.Group, daoReg *dao.DaoRegistry,
 	addRepoRoute(engine, http.MethodGet, "/repository_gpg_key/:uuid", rh.getGpgKeyFile, rbac.RbacVerbRead)
 	addRepoRoute(engine, http.MethodPost, "/repositories/bulk_export/", rh.bulkExportRepositories, rbac.RbacVerbRead)
 	addRepoRoute(engine, http.MethodPost, "/repositories/bulk_import/", rh.bulkImportRepositories, rbac.RbacVerbWrite)
+	addRepoRoute(engine, http.MethodGet, "/repositories/urls/", rh.getUrls, rbac.RbacVerbRead)
 }
 
 func getAccountIdOrgId(c echo.Context) (string, string) {
 	data := identity.GetIdentity(c.Request().Context())
 	return data.Identity.AccountNumber, data.Identity.Internal.OrgID
+}
+
+func (rh *RepositoryHandler) getUrls(c echo.Context) error{
+	urls, err := rh.DaoRegistry.Repository.FetchAllUrls(c.Request().Context())
+	if err != nil {
+		return ce.NewErrorResponse(ce.HttpCodeForDaoError(err), "Error fetching urls of repositories", err.Error())
+	}
+	return c.JSON(200, &urls)
 }
 
 // ListRepositories godoc

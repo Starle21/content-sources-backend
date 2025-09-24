@@ -71,6 +71,7 @@ func (sh *SnapshotHelper) Run(versionHref string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("---")
 	fmt.Println("Top Helper, distTaskHref: ", *distTaskHref)
 	err = sh.payload.SaveDistributionTaskHref(*distTaskHref)
 	if err != nil {

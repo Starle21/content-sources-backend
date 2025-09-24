@@ -76,6 +76,8 @@ type SnapshotRepository struct {
 
 // SnapshotRepository creates a snapshot of a given repository config
 func (sr *SnapshotRepository) Run() (err error) {
+	fmt.Println("---")
+	fmt.Println("Run repository snapshot, start of the handler")
 	var remoteHref string
 	var repoHref string
 	sr.repoConfig, err = sr.lookupRepoObjects()
@@ -240,11 +242,13 @@ func (sr *SnapshotRepository) findOrCreateRemote(repoConfig api.RepositoryRespon
 		return "", err
 	}
 	if remoteResp == nil {
+		fmt.Println("Create a new remote")
 		remoteResp, err = sr.pulpClient.CreateRpmRemote(sr.ctx, repoConfig.UUID, repoConfig.URL, clientCertPair, clientCertPair, caCert)
 		if err != nil {
 			return "", err
 		}
 	} else if remoteResp.PulpHref != nil { // blindly update the remote
+		fmt.Println("update existing remote")
 		_, err = sr.pulpClient.UpdateRpmRemote(sr.ctx, *remoteResp.PulpHref, repoConfig.URL, clientCertPair, clientCertPair, caCert)
 		if err != nil {
 			return "", err

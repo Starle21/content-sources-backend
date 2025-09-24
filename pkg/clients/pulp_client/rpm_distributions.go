@@ -83,8 +83,8 @@ func (r *pulpDaoImpl) UpdateRpmDistribution(ctx context.Context, rpmDistribution
 	if err != nil {
 		return "", errorWithResponseBody("error listing rpm distributions", httpResp, err)
 	}
-	// no change has been made, no pulp task created
-	if httpResp != nil && httpResp.StatusCode == 200 {
+	// no change has been made, no pulp task created (indicated by 204)
+	if httpResp != nil && httpResp.StatusCode == 204 {
 		fmt.Println("UpdateRpmDistribution, no change, no task")
 		return "", nil
 	}

@@ -88,10 +88,51 @@ func (s *SnapshotSuite) TestSnapshotUpload() {
 	assert.NoError(s.T(), err)
 }
 
+func (s *SnapshotSuite) TestTriggerSnapshotWithNoChange() {
+	// create a repository
+	s.dao = dao.GetDaoRegistry(db.DB)
+	accountId := uuid2.NewString()
+	repo, err := s.dao.RepositoryConfig.Create(s.ctx, api.RepositoryRequest{
+		Name:      utils.Ptr(uuid2.NewString()),
+		URL:       utils.Ptr("https://fixtures.pulpproject.org/rpm-unsigned/"),
+		AccountID: utils.Ptr(accountId),
+		OrgID:     utils.Ptr(accountId),
+	})
+	assert.NoError(s.T(), err)
+	repoUuid, err := uuid2.Parse(repo.RepositoryUUID)
+	assert.NoError(s.T(), err)
+
+	// create a snapshot for it
+	taskClient := client.NewTaskClient(&s.queue)
+	s.snapshotAndWait(taskClient, repo, repoUuid, true)
+
+	// trigger a new snapshot for it again
+	fmt.Println("---")
+	fmt.Println("trigger snapshot again")
+	taskUuid, err := taskClient.Enqueue(queue.Task{Typename: config.RepositorySnapshotTask, Payload: payloads.SnapshotPayload{}, OrgId: repo.OrgID,
+	ObjectUUID: utils.Ptr(repoUuid.String()), ObjectType: utils.Ptr(config.ObjectTypeRepository)})
+	assert.NoError(s.T(), err)
+
+	fmt.Println("---")
+	fmt.Println("taskUuid: ", taskUuid)
+	
+	s.WaitOnTask(taskUuid)
+	
+	// verify the no snapshot was created
+	snaps, _, err := s.dao.Snapshot.List(s.ctx, repo.OrgID, repo.UUID, api.PaginationData{Limit: -1}, api.FilterData{})
+	assert.NoError(s.T(), err)
+	fmt.Println("---")
+	fmt.Println("snaps: ", snaps)
+	assert.Empty(s.T(), snaps)
+
+	// assert that no task is created
+}
+
 // https://github.com/content-services/content-sources-backend/blob/main/test/integration/snapshot_test.go#L91
-func (s *SnapshotSuite) TestSnapshot() {
+func (s *SnapshotSuite) TestSnapshotCreated() {
 	s.dao = dao.GetDaoRegistry(db.DB)
 
+	fmt.Println("Setup the repository")
 	// Setup the repository
 	accountId := uuid2.NewString()
 	repo, err := s.dao.RepositoryConfig.Create(s.ctx, api.RepositoryRequest{
@@ -104,16 +145,19 @@ func (s *SnapshotSuite) TestSnapshot() {
 	repoUuid, err := uuid2.Parse(repo.RepositoryUUID)
 	assert.NoError(s.T(), err)
 
+	fmt.Println("Start the task, snapshotAndWait")
 	// Start the task
 	taskClient := client.NewTaskClient(&s.queue)
 	s.snapshotAndWait(taskClient, repo, repoUuid, true)
 
+	fmt.Println("Verify the snapshot was created")
 	// Verify the snapshot was created
 	snaps, _, err := s.dao.Snapshot.List(s.ctx, repo.OrgID, repo.UUID, api.PaginationData{Limit: -1}, api.FilterData{})
 	assert.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), snaps)
 	time.Sleep(5 * time.Second)
 
+	fmt.Println("Fetch the repomd.xml to verify its being served")
 	// Fetch the repomd.xml to verify its being served
 	distPath := fmt.Sprintf("%s/repodata/repomd.xml", snaps.Data[0].URL)
 	err = s.getRequest(distPath, identity.Identity{OrgID: accountId, Internal: identity.Internal{OrgID: accountId}}, 200)
@@ -122,9 +166,11 @@ func (s *SnapshotSuite) TestSnapshot() {
 	err = s.getRequest(distPath, identity.Identity{X509: &identity.X509{SubjectDN: exampleCertCN}}, 200)
 	assert.NoError(s.T(), err)
 
+	fmt.Println("But can't be served without a valid org id or common dn")
 	// But can't be served without a valid org id or common dn
 	_ = s.getRequest(distPath, identity.Identity{}, 403)
 
+	fmt.Println("Update the url")
 	// Update the url
 	newUrl := "https://fixtures.pulpproject.org/rpm-with-sha-512/"
 	urlUpdated, err := s.dao.RepositoryConfig.Update(s.ctx, accountId, repo.UUID, api.RepositoryUpdateRequest{URL: &newUrl})
@@ -136,6 +182,7 @@ func (s *SnapshotSuite) TestSnapshot() {
 	assert.True(s.T(), urlUpdated)
 	assert.NoError(s.T(), err)
 
+	fmt.Println("snapshotAndWait")
 	s.snapshotAndWait(taskClient, repo, repoUuid, true)
 
 	domainName, err := s.dao.Domain.FetchOrCreateDomain(s.ctx, accountId)
@@ -147,10 +194,12 @@ func (s *SnapshotSuite) TestSnapshot() {
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), repo.URL, remote.Url)
 
+	fmt.Println("Create template and add repository to template")
 	// Create template and add repository to template
 	cpClient := candlepin_client.NewCandlepinClient()
 	environmentID := s.createTemplate(cpClient, s.ctx, repo, domainName)
 
+	fmt.Println("Delete the repository")
 	// Delete the repository
 	taskUuid, err := taskClient.Enqueue(queue.Task{
 		Typename:   config.DeleteRepositorySnapshotsTask,
@@ -163,16 +212,19 @@ func (s *SnapshotSuite) TestSnapshot() {
 
 	s.WaitOnTask(taskUuid)
 
+	fmt.Println("Verify the snapshot was deleted")
 	// Verify the snapshot was deleted
 	snaps, _, err = s.dao.Snapshot.List(s.ctx, repo.OrgID, repo.UUID, api.PaginationData{Limit: -1}, api.FilterData{})
 	assert.Error(s.T(), err)
 	assert.Empty(s.T(), snaps.Data)
 	time.Sleep(5 * time.Second)
 
+	fmt.Println("Fetch the repomd.xml to verify it's not being served")
 	// Fetch the repomd.xml to verify it's not being served
 	err = s.getRequest(distPath, identity.Identity{OrgID: accountId, Internal: identity.Internal{OrgID: accountId}}, 404)
 	assert.NoError(s.T(), err)
 
+	fmt.Println("Assert template environment content on longer exists")
 	// Assert template environment content on longer exists
 	content, _ := cpClient.FetchContent(s.ctx, candlepin_client.DevelOrgKey, candlepin_client.GetContentID(repo.UUID))
 	assert.Nil(s.T(), content)
@@ -267,6 +319,29 @@ func (s *SnapshotSuite) snapshotAndWait(taskClient client.TaskClient, repo api.R
 		assert.NoError(s.T(), err)
 	}
 }
+// func (s *SnapshotSuite) snapshotAndTe(taskClient client.TaskClient, repo api.RepositoryResponse, repoUuid uuid2.UUID, verifyRepomd bool) {
+// 	var err error
+// 	taskUuid, err := taskClient.Enqueue(queue.Task{Typename: config.RepositorySnapshotTask, Payload: payloads.SnapshotPayload{}, OrgId: repo.OrgID,
+// 		ObjectUUID: utils.Ptr(repoUuid.String()), ObjectType: utils.Ptr(config.ObjectTypeRepository)})
+// 	assert.NoError(s.T(), err)
+
+// 	s.WaitOnTask(taskUuid)
+
+// 	// Verify the snapshot was created
+// 	snaps, _, err := s.dao.Snapshot.List(s.ctx, repo.OrgID, repo.UUID, api.PaginationData{Limit: -1}, api.FilterData{})
+// 	assert.NoError(s.T(), err)
+// 	assert.NotEmpty(s.T(), snaps)
+// 	time.Sleep(5 * time.Second)
+
+// 	if verifyRepomd {
+// 		// Fetch the repomd.xml to verify its being served
+// 		distPath := fmt.Sprintf("%s/repodata/repomd.xml", snaps.Data[0].URL)
+// 		err = s.getRequest(distPath, identity.Identity{OrgID: repo.OrgID, Internal: identity.Internal{OrgID: repo.OrgID}}, 200)
+// 		assert.NoError(s.T(), err)
+// 	}
+// }
+
+
 
 func (s *SnapshotSuite) cancelAndWait(taskClient client.TaskClient, taskUUID uuid2.UUID, repo api.RepositoryResponse) {
 	var err error

@@ -71,7 +71,7 @@ func (r *pulpDaoImpl) UpdateRpmRemote(ctx context.Context, pulpHref string, url 
 		PatchedrpmRpmRemote(patchRpmRemote).Execute()
 	if httpResp != nil {
 		fmt.Println("RESPONSE REMOTE: ", httpResp.StatusCode)
-		fmt.Println("task: ", updateResp)
+		fmt.Println("task: ", *updateResp)
 		defer httpResp.Body.Close()
 	}
 	if err != nil {

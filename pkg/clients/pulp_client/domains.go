@@ -67,7 +67,7 @@ func (r *pulpDaoImpl) UpdateDomainIfNeeded(ctx context.Context, name string) err
 			StorageSettings: S3StorageConfiguration(),
 		}
 		_, resp, err := client.DomainsAPI.DomainsPartialUpdate(ctx, *domain.PulpHref).PatchedDomain(patchedDomain).Execute()
-		// Execute returns as the first parameter either no taskHref and resp.StatusCode 200 or taskHref with resp.StatusCode 202
+		// Execute returns as the first parameter either no taskHref and resp.StatusCode 204 or taskHref with resp.StatusCode 202
 		if resp != nil && resp.Body != nil {
 			fmt.Println("RESPONSE DOMAIN: ", resp.StatusCode)
 			defer resp.Body.Close()

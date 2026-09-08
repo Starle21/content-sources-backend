@@ -257,6 +257,16 @@ func (sh *SnapshotHandler) publishSnapshot(c echo.Context) error {
 		return ce.NewErrorResponse(http.StatusBadRequest, "Error validating parameters", "Request body must include the 'published' field.")
 	}
 
+	// Check for an already-active publish task on this snapshot
+	existingSnap, err := sh.DaoRegistry.Snapshot.Fetch(c.Request().Context(), orgID, snapshotUUID)
+	if err != nil {
+		return ce.NewErrorResponse(ce.HttpCodeForDaoError(err), "Error fetching snapshot", err.Error())
+	}
+	if existingSnap.PublishTask != nil &&
+		(existingSnap.PublishTask.Status == config.TaskStatusPending || existingSnap.PublishTask.Status == config.TaskStatusRunning) {
+		return ce.NewErrorResponse(http.StatusConflict, "Error (un)publishing snapshot", "A publish task is already in progress for this snapshot.")
+	}
+
 	snapshot, err := sh.DaoRegistry.Snapshot.UpdatePublishedStatus(c.Request().Context(), orgID, *params.Published, repoUUID, snapshotUUID)
 	if err != nil {
 		return ce.NewErrorResponse(ce.HttpCodeForDaoError(err), "Error (un)publishing snapshot", err.Error())

@@ -743,6 +743,8 @@ func (suite *SnapshotSuite) TestPublishSnapshot() {
 		Return(api.SnapshotResponse{UUID: snapshotUUID, Published: true}, nil)
 	mockUpdateSnapshotPublishedEnqueue(suite.tcMock, repoUUID, snapshotUUID, requestID, true).
 		Return(publishTaskID, nil)
+	suite.reg.Snapshot.On("UpdatePublishTaskUUID", test.MockCtx(), snapshotUUID, publishTaskID.String()).
+		Return(nil)
 	mockUpdateLatestSnapshotEnqueue(suite.tcMock, repoUUID, requestID, publishTaskID).
 		Return(updateLatestTaskID, nil)
 	suite.reg.Template.On("InternalOnlyGetTemplatesForRepoConfig", test.MockCtx(), repoUUID, false).
@@ -765,6 +767,9 @@ func (suite *SnapshotSuite) TestPublishSnapshot() {
 	err = json.Unmarshal(respBody, &resp)
 	assert.NoError(t, err)
 	assert.True(t, resp.Published)
+	assert.Equal(t, publishTaskID.String(), resp.PublishTaskUUID)
+	assert.NotNil(t, resp.PublishTask)
+	assert.Equal(t, config.TaskStatusPending, resp.PublishTask.Status)
 }
 
 func (suite *SnapshotSuite) TestPublishSnapshotWithForeignTemplates() {
@@ -781,6 +786,8 @@ func (suite *SnapshotSuite) TestPublishSnapshotWithForeignTemplates() {
 		Return(api.SnapshotResponse{UUID: snapshotUUID, Published: true}, nil)
 	mockUpdateSnapshotPublishedEnqueue(suite.tcMock, repoUUID, snapshotUUID, requestID, true).
 		Return(publishTaskID, nil)
+	suite.reg.Snapshot.On("UpdatePublishTaskUUID", test.MockCtx(), snapshotUUID, publishTaskID.String()).
+		Return(nil)
 	mockUpdateLatestSnapshotEnqueue(suite.tcMock, repoUUID, requestID, publishTaskID).
 		Return(updateLatestTaskID, nil)
 	suite.reg.Template.On("InternalOnlyGetTemplatesForRepoConfig", test.MockCtx(), repoUUID, false).
@@ -819,6 +826,8 @@ func (suite *SnapshotSuite) TestUnpublishSnapshotEnqueuesForeignFixedTemplateFro
 		Return(api.SnapshotResponse{UUID: snapshotUUID, Published: false}, nil)
 	mockUpdateSnapshotPublishedEnqueue(suite.tcMock, repoUUID, snapshotUUID, requestID, false).
 		Return(publishTaskID, nil)
+	suite.reg.Snapshot.On("UpdatePublishTaskUUID", test.MockCtx(), snapshotUUID, publishTaskID.String()).
+		Return(nil)
 	mockUpdateLatestSnapshotEnqueue(suite.tcMock, repoUUID, requestID, publishTaskID).
 		Return(uuid.New(), nil)
 	suite.reg.Template.On("InternalOnlyGetTemplatesForRepoConfig", test.MockCtx(), repoUUID, false).
